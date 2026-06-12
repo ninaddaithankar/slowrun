@@ -2003,7 +2003,7 @@ def main():
 
     # wandb
     run_name = args.run if args.run else f"slowrun-main_{run_id}"
-    _wandb_kwargs = {"project": "slowrun", "name": run_name}
+    _wandb_kwargs = {"project": "eb_slowrun", "name": run_name}
     if args.wandb_group:
         _wandb_kwargs["group"] = args.wandb_group
     wandb_run = DummyWandb() if not master_process else wandb.init(**_wandb_kwargs)

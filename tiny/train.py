@@ -809,7 +809,7 @@ sys.stdout = TeeStream(sys.stdout, artifacts_log_f)
 sys.stderr = TeeStream(sys.stderr, artifacts_log_f)
 
 # wandb
-_wandb_kwargs = {"project": "slowrun", "name": run_name}
+_wandb_kwargs = {"project": "eb_slowrun", "name": run_name}
 if args.wandb_group:
     _wandb_kwargs["group"] = args.wandb_group
 _wandb_kwargs["dir"] = os.path.join(run_dir, "wandb")

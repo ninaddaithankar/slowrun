@@ -203,14 +203,28 @@ def _load_fa3():
         print0("Warning: kernels package not found. Install with: pip install -U kernels")
         return None
     except Exception as e:
-        print0(f"Warning: Failed to load FA3 kernel: {e}")
+        print0(f"Warning: Failed to load FA3 kernel (will use PyTorch SDPA fallback)")
         return None
 
 _fa3 = _load_fa3()
 
 def flash_attn_func(q, k, v, causal=False, window_size=(-1, -1)):
-    """Flash Attention for training (FA3 only). q,k,v: (B, T, H, D)."""
-    return _fa3.flash_attn_func(q, k, v, causal=causal, window_size=window_size)
+    """Flash Attention for training. FA3 preferred; falls back to PyTorch SDPA. q,k,v: (B, T, H, D)."""
+    if _fa3 is not None:
+        return _fa3.flash_attn_func(q, k, v, causal=causal, window_size=window_size)
+    # PyTorch SDPA fallback — expects (B, H, T, D)
+    B, T, H, D = q.shape
+    qt, kt, vt = q.transpose(1, 2), k.transpose(1, 2), v.transpose(1, 2)
+    left = window_size[0]
+    if 0 < left < T:
+        # Causal sliding-window mask
+        i = torch.arange(T, device=q.device).unsqueeze(1)
+        j = torch.arange(T, device=q.device).unsqueeze(0)
+        attn_mask = (j <= i) & (j >= i - left)
+        y = F.scaled_dot_product_attention(qt, kt, vt, attn_mask=attn_mask.unsqueeze(0).unsqueeze(0).expand(B, H, -1, -1))
+    else:
+        y = F.scaled_dot_product_attention(qt, kt, vt, is_causal=causal)
+    return y.transpose(1, 2)
 
 flash_attn = SimpleNamespace(flash_attn_func=flash_attn_func)
 
@@ -975,7 +989,7 @@ if device_type == "cuda":
 if _fa3 is not None:
     print0("Using Flash Attention 3 (Hopper GPU detected)")
 else:
-    raise RuntimeError("Flash Attention 3 is required but not available. A Hopper (sm90) GPU is needed.")
+    print0("FA3 unavailable, falling back to PyTorch SDPA (sliding-window layers use attention mask)")
 
 # Run / logging paths
 run_name, run_dir = resolve_run_dir(args.run_name)
@@ -999,7 +1013,7 @@ if master_process:
     sys.stderr = TeeStream(sys.stderr, artifacts_log_f)
 
 # wandb
-_wandb_kwargs = {"project": "slowrun", "name": run_name, "dir": os.path.join(run_dir, "wandb")}
+_wandb_kwargs = {"project": "eb_slowrun", "name": run_name, "dir": os.path.join(run_dir, "wandb")}
 if args.wandb_group:
     _wandb_kwargs["group"] = args.wandb_group
 wandb_run = DummyWandb() if not master_process else wandb.init(**_wandb_kwargs)

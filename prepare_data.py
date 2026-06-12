@@ -91,7 +91,7 @@ def verify_hash(filepath):
         print(f"  Hash OK for {basename}: {actual}")
 
 
-def preprocess(train_tokens, val_tokens, local_dir):
+def preprocess(train_tokens, val_tokens, local_dir, skip_verify=False):
     encoder = tiktoken.get_encoding("gpt2")
     bos_id = encoder._special_tokens["<|endoftext|>"]
 
@@ -128,8 +128,9 @@ def preprocess(train_tokens, val_tokens, local_dir):
     write_datafile(train_path, train_tokens_arr, train_doc_starts, bos_id, TRAIN_SHUFFLE_SEED)
 
     print()
-    verify_hash(val_path)
-    verify_hash(train_path)
+    if not skip_verify:
+        verify_hash(val_path)
+        verify_hash(train_path)
 
     print(f"\nDone! Files saved to {local_dir}/")
 
@@ -139,10 +140,12 @@ if __name__ == "__main__":
     parser.add_argument("--train_tokens", type=int, default=100_000_000)
     parser.add_argument("--val_tokens", type=int, default=10_000_000)
     parser.add_argument("--local_dir", type=str, default="fineweb_data")
+    parser.add_argument("--no-verify", action="store_true", help="Skip hash verification (use for non-default token counts)")
     args = parser.parse_args()
 
     preprocess(
         train_tokens=args.train_tokens,
         val_tokens=args.val_tokens,
         local_dir=args.local_dir,
+        skip_verify=args.no_verify,
     )
