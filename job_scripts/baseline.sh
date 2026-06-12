@@ -7,7 +7,7 @@
 #SBATCH --cpus-per-gpu=72
 
 ### ADDITIONAL RUN INFO ###
-#SBATCH --array=0-2
+#SBATCH --array=2
 #SBATCH --time=24:00:00
 #SBATCH --nodes=1
 #SBATCH --gpus-per-node=2
@@ -33,7 +33,7 @@ num_epochs=( 2200    220     22     )
 
 IDX=${SLURM_ARRAY_TASK_ID}
 SCALE=${scales[$IDX]}
-RUN_NAME="slowrun-baseline-gpt2_s|data=${SCALE}"
+RUN_NAME="data=${SCALE}|slowrun-baseline-gpt2_s"
 
 torchrun --standalone --nproc_per_node=1 train.py \
   --run-name "${RUN_NAME}" \
@@ -54,5 +54,6 @@ torchrun --standalone --nproc_per_node=1 train.py \
   --logit-avg 0 \
   --swa-last-epochs 0 \
   --dupe-start-epoch 999999 \
+  --val-interval 5000 \
   \
   --wandb_group "eb_slowrun"

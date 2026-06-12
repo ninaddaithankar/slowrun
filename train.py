@@ -92,6 +92,8 @@ parser.add_argument("--iha-lr", type=float, default=0.02,
                     help="LR for IHA mixing matrices")
 parser.add_argument("--no-doc-shuffle", action="store_true",
                     help="Disable per-epoch document reshuffling (still shuffles batch order)")
+parser.add_argument("--val-interval", type=int, default=0,
+                    help="Validate every N steps instead of every epoch (0=epoch-based)")
 args = parser.parse_args()
 
 # Resolve output path
@@ -1224,8 +1226,11 @@ while not args.eval_logit_avg and current_epoch <= args.num_epochs:
         dist.all_reduce(epoch_tensor, op=dist.ReduceOp.MAX)
         epoch = epoch_tensor.item()
 
-    # Epoch boundary: evaluate when the dataloader advances to a new epoch
-    if epoch != current_epoch:
+    # Validation: either at fixed step intervals or at epoch boundaries
+    is_last_step = (epoch > args.num_epochs)
+    do_val = (args.val_interval > 0 and (step % args.val_interval == 0 or is_last_step)) or \
+             (args.val_interval == 0 and epoch != current_epoch)
+    if do_val:
         model.eval()
         val_loader = build_val_loader()
         with autocast_ctx:
@@ -1257,10 +1262,9 @@ while not args.eval_logit_avg and current_epoch <= args.num_epochs:
             print0(f"  Saved checkpoint {ckpt_path} ({len(late_checkpoint_paths)}/{logit_avg_count})")
 
         model.train()
-        # Update num_iterations estimate now that we know real steps per epoch
-        # steps_per_epoch = step // current_epoch
-        # num_iterations = steps_per_epoch * args.num_epochs
-        # print0(f"Epoch {current_epoch} took {steps_per_epoch} steps. Updated estimate: {num_iterations} total steps.")
+
+    # Always advance epoch counter so the training loop terminates correctly
+    if epoch != current_epoch:
         current_epoch = epoch
 
     # GC management
